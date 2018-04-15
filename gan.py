@@ -71,7 +71,7 @@ class GANModel:
             if epoch % 1000 == 0:
                 duration = time.time() - start_time
                 # import pdb; pdb.set_trace()
-                print 'Epoch {:}: gen_loss = {:.4f} dis_loss = {:.4f} ({:.3f} sec)'.format(epoch, losses["gen"][-1], losses["dis"][-1], duration)
+                print ('Epoch {:}: gen_loss = {:.4f} dis_loss = {:.4f} ({:.3f} sec)'.format(epoch, losses["gen"][-1], losses["dis"][-1], duration))
                 start_time = time.time()
                 plt.figure(epoch)
                 self.run_display(sess, inputs, true_dis)
@@ -151,14 +151,10 @@ class GANModel:
         self.dis_layer3 = {}
         self.dis_layer1["W"] = tf.Variable(initial_value = tf.random_normal(shape = [self.config.input_dim, self.config.dis_hidden[0]], mean = 0.0, stddev = 1.0), name = 'discriminator_weight' )
         self.dis_layer1["b"] = tf.Variable(initial_value = tf.random_normal(shape = [self.config.dis_hidden[0]] , mean = 0.0, stddev = 1.0), name = 'discriminator_bias' ) 
-        # self.dis_layer1["output"] = tf.add(tf.matmul(input, self.dis_layer1["W"]), self.dis_layer1["b"])
         self.dis_layer2["W"] = tf.Variable(initial_value = tf.random_normal(shape = [self.config.dis_hidden[0], self.config.dis_hidden[1]], mean = 0.0, stddev = 1.0), name = 'discriminator_weight' )
         self.dis_layer2["b"] = tf.Variable(initial_value = tf.random_normal(shape = [self.config.dis_hidden[1]] , mean = 0.0, stddev = 1.0), name = 'discriminator_bias' ) 
-        # self.dis_layer2["output"] = tf.add(tf.matmul(self.dis_layer1["output"], self.dis_layer2["W"]), self.dis_layer2["b"])
         self.dis_layer3["W"] = tf.Variable(initial_value = tf.random_normal(shape = [self.config.dis_hidden[1], 1], mean = 0.0, stddev = 1.0), name = 'discriminator_weight' )
         self.dis_layer3["b"] = tf.Variable(initial_value = tf.random_normal(shape = [1] , mean = 0.0, stddev = 1.0), name = 'discriminator_bias' )
-        # self.dis_layer3["output"] = tf.nn.sigmoid(tf.add(tf.matmul(self.dis_layer2["output"], self.dis_layer3["W"]), self.dis_layer3["b"]))
-        # return self.dis_layer3["output"]
 
     def add_discriminator_op(self, input):
         output1 = tf.nn.relu(tf.add(tf.matmul(input, self.dis_layer1["W"]), self.dis_layer1["b"]))
@@ -187,7 +183,7 @@ class GANModel:
 
     def build(self):
         self.add_placeholder()
-        with tf.device("/device:GPU:3"):
+        with tf.device("/device:GPU:0"):
             self.gen_pred = self.add_generator_op()
             self.add_discriminator_network()
             self.dis_fake = self.add_discriminator_op(self.gen_pred)

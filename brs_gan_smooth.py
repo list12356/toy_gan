@@ -55,7 +55,8 @@ class Generator:
         G_h1 = tf.nn.relu(tf.matmul(self.Z, self.G_W1) + self.G_b1)
         G_log_prob = tf.matmul(G_h1, self.G_W2) + self.G_b2
         self.G_prob = tf.nn.sigmoid(G_log_prob)
-        self.G_sample = tf.to_int32(self.G_prob > tf.random_normal([1, data_dim]))
+        # self.G_sample = tf.to_int32(self.G_prob > tf.random_normal([1, data_dim]))
+        self.G_sample = self.G_prob
 
     def update(self):
         return
@@ -115,8 +116,8 @@ S_loss = -tf.reduce_mean(tf.log(S_fake))
 # D_loss = D_loss_real + D_loss_fake
 # G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.ones_like(D_logit_fake)))
 
-D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
-# D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
+# D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
+D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
 # G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=theta_G)
 
 mb_size = 128
@@ -146,15 +147,11 @@ sess.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 
 if restore == True:
-    weights = np.load('save/generator_200.npz')
+    weights = np.load('save/generator_100.npz')
     sess.run(tf.assign(G.G_W1, weights['gw1']))
     sess.run(tf.assign(G.G_W2, weights['gw2']))
     sess.run(tf.assign(G.G_b1, weights['gb1']))
     sess.run(tf.assign(G.G_b2, weights['gb2']))
-    sess.run(tf.assign(D_W1, weights['dw1']))
-    sess.run(tf.assign(D_W2, weights['dw2']))
-    sess.run(tf.assign(D_b1, weights['db1']))
-    sess.run(tf.assign(D_b2, weights['db2']))
     
 
 for it in range(1000000):
@@ -168,7 +165,7 @@ for it in range(1000000):
         plt.savefig(out_dir + '/{}.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig)
         X_mb, _ = mnist.train.next_batch(16)
-        X_mb = (X_mb > 0.5).astype(int)
+        # X_mb = (X_mb > 0.5).astype(int)
         fig2 = plot(X_mb)
         plt.savefig(out_dir + '/{}_real.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig2)
@@ -177,7 +174,7 @@ for it in range(1000000):
 
 
     X_mb, _ = mnist.train.next_batch(mb_size)
-    X_mb = (X_mb > 0.5).astype(int)
+    # X_mb = (X_mb > 0.5).astype(int)
 
     sample = sample_Z(mb_size, Z_dim)
 

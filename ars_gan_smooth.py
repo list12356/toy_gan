@@ -23,8 +23,9 @@ out_dir = args.dir
 save_step = 100
 data_dim = 784
 Z_dim = 100
-search_num = 100
-alpha = 0.001
+search_num = 200 
+top_num = 100 # only top performance is used
+alpha =0.001 
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = True
 D_lr = 1e-4
@@ -118,8 +119,8 @@ S_loss = -tf.reduce_mean(tf.log(S_fake))
 # D_loss = D_loss_real + D_loss_fake
 # G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.ones_like(D_logit_fake)))
 
-# D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
-D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
+D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
+# D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
 # G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=theta_G)
 
 mb_size = 128
@@ -138,6 +139,9 @@ for t in range(len(G.theta_G)):
     update_Sn.append(tf.assign(S.theta_G[t], G.theta_G[t] - delta_ph[t]))
     update_G.append(tf.assign(G.theta_G[t], G.theta_G[t] + update_Gph[t]))
 
+sigma_R = 0
+
+
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
@@ -149,11 +153,15 @@ sess.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 
 if restore == True:
-    weights = np.load('save/generator_100.npz')
+    weights = np.load('save/generator_200.npz')
     sess.run(tf.assign(G.G_W1, weights['gw1']))
     sess.run(tf.assign(G.G_W2, weights['gw2']))
     sess.run(tf.assign(G.G_b1, weights['gb1']))
     sess.run(tf.assign(G.G_b2, weights['gb2']))
+    sess.run(tf.assign(D_W1, weights['dw1']))
+    sess.run(tf.assign(D_W2, weights['dw2']))
+    sess.run(tf.assign(D_b1, weights['db1']))
+    sess.run(tf.assign(D_b2, weights['db2']))
     
 
 for it in range(1000000):
@@ -181,10 +189,12 @@ for it in range(1000000):
     sample = sample_Z(mb_size, Z_dim)
 
     update = []
+    reward_list = []
+    delta_list = []
     for m in range(search_num):
         delta = []
         for t in range(len(G.theta_G)):
-            delta.append(np.random.normal(loc=0.0, scale=1.0,
+            delta.append(np.random.normal(loc=0.0, scale=1.,
                                         size=G.size[t]))
         for t in range(len(G.theta_G)):
             sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})
@@ -192,14 +202,30 @@ for it in range(1000000):
         for t in range(len(G.theta_G)):
             sess.run(update_Sn[t], feed_dict={delta_ph[t]: delta[t]})
         reward = reward - sess.run(S_loss, feed_dict={S.Z: sample})
+        # if m == 0: 
+        #     for t in range(len(G.theta_G)):
+        #         update.append(reward * delta[t])
+        # else:
+        #     for t in range(len(G.theta_G)):
+        #         update[t] += reward * delta[t]
+        reward_list.append(reward)
+        delta_list.append(delta)
+
+    sigma_R = np.std(reward_list)
+    #TODO: rank and make the selection
+    sort_ind = np.argsort(reward_list)
+    sort_ind = sort_ind[:top_num]
+    for m in range(len(sort_ind)):
+        ind = sort_ind[m]
         if m == 0: 
             for t in range(len(G.theta_G)):
-                update.append(reward * delta[t])
+                update.append(reward_list[ind] * delta_list[ind][t])
         else:
             for t in range(len(G.theta_G)):
-                update[t] += reward * delta[t]
+                update[t] += reward_list[ind] * delta_list[ind][t]
+
     for t in range(len(G.theta_G)):
-        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / search_num})
+        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / (top_num*sigma_R)})
     upd = 0
 
     G_loss_curr = sess.run(G_loss, feed_dict={G.Z: sample})
@@ -208,7 +234,7 @@ for it in range(1000000):
     if it % 10 == 0:
         print('Iter: {}'.format(it))
         for t in range(1):
-            print(update[0] * alpha / search_num)
+            print(update[0] * alpha / (top_num*sigma_R))
             print(sess.run(G.theta_G[0]))
         print('D loss: {:.4}'.format(D_loss_curr))
         print('G_loss: {:.4}'.format(G_loss_curr))

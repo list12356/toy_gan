@@ -1,6 +1,8 @@
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import os
@@ -21,8 +23,8 @@ out_dir = args.dir
 save_step = 100
 data_dim = 784
 Z_dim = 100
-search_num = 320
-alpha = 1
+search_num = 100
+alpha = 0.001
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = True
 D_lr = 1e-4
@@ -185,7 +187,7 @@ for it in range(1000000):
     for m in range(search_num):
         delta = []
         for t in range(len(G.theta_G)):
-            delta.append(np.random.normal(loc=0.0, scale=1. / np.sqrt(G.size[t][0] / 2.) / 100,
+            delta.append(np.random.normal(loc=0.0, scale=1.,
                                         size=G.size[t]))
         for t in range(len(G.theta_G)):
             sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})

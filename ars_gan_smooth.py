@@ -23,11 +23,11 @@ out_dir = args.dir
 save_step = 100
 data_dim = 784
 Z_dim = 100
-search_num = 64
-alpha = 1
-v = 0.02
+search_num = 200 
+top_num = 100 # only top performance is used
+alpha =0.001 
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
-restore = False
+restore = True
 D_lr = 1e-4
 
 X = tf.placeholder(tf.float32, shape=[None, data_dim])
@@ -58,7 +58,8 @@ class Generator:
         G_h1 = tf.nn.relu(tf.matmul(self.Z, self.G_W1) + self.G_b1)
         G_log_prob = tf.matmul(G_h1, self.G_W2) + self.G_b2
         self.G_prob = tf.nn.sigmoid(G_log_prob)
-        self.G_sample = tf.to_int32(self.G_prob > tf.random_normal([1, data_dim]))
+        # self.G_sample = tf.to_int32(self.G_prob > tf.random_normal([1, data_dim]))
+        self.G_sample = self.G_prob
 
     def update(self):
         return
@@ -106,11 +107,11 @@ D_real, D_logit_real = discriminator(X)
 D_fake, D_logit_fake = discriminator(G_sample)
 
 D_loss = -tf.reduce_mean(tf.log(D_real) + tf.log(1. - D_fake))
-G_loss = tf.reduce_mean(tf.log(D_fake)) * 100
+G_loss = -tf.reduce_mean(tf.log(D_fake))
 
 S_fake, S_logit_fake = discriminator(S_sample)
 
-S_loss = tf.reduce_mean(tf.log(S_fake)) * 100
+S_loss = -tf.reduce_mean(tf.log(S_fake))
 # Alternative losses:
 # -------------------
 # D_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_real, labels=tf.ones_like(D_logit_real)))
@@ -118,8 +119,8 @@ S_loss = tf.reduce_mean(tf.log(S_fake)) * 100
 # D_loss = D_loss_real + D_loss_fake
 # G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.ones_like(D_logit_fake)))
 
-# D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
-D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
+D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
+# D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
 # G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=theta_G)
 
 mb_size = 128
@@ -137,6 +138,9 @@ for t in range(len(G.theta_G)):
     update_Sp.append(tf.assign(S.theta_G[t], G.theta_G[t] + delta_ph[t]))
     update_Sn.append(tf.assign(S.theta_G[t], G.theta_G[t] - delta_ph[t]))
     update_G.append(tf.assign(G.theta_G[t], G.theta_G[t] + update_Gph[t]))
+
+sigma_R = 0
+
 
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
@@ -171,7 +175,7 @@ for it in range(1000000):
         plt.savefig(out_dir + '/{}.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig)
         X_mb, _ = mnist.train.next_batch(16)
-        X_mb = (X_mb > 0.5).astype(int)
+        # X_mb = (X_mb > 0.5).astype(int)
         fig2 = plot(X_mb)
         plt.savefig(out_dir + '/{}_real.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig2)
@@ -180,15 +184,17 @@ for it in range(1000000):
 
 
     X_mb, _ = mnist.train.next_batch(mb_size)
-    X_mb = (X_mb > 0.5).astype(int)
+    # X_mb = (X_mb > 0.5).astype(int)
 
     sample = sample_Z(mb_size, Z_dim)
 
     update = []
+    reward_list = []
+    delta_list = []
     for m in range(search_num):
         delta = []
         for t in range(len(G.theta_G)):
-            delta.append(np.random.normal(loc=0.0, scale=v,
+            delta.append(np.random.normal(loc=0.0, scale=1.,
                                         size=G.size[t]))
         for t in range(len(G.theta_G)):
             sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})
@@ -196,14 +202,30 @@ for it in range(1000000):
         for t in range(len(G.theta_G)):
             sess.run(update_Sn[t], feed_dict={delta_ph[t]: delta[t]})
         reward = reward - sess.run(S_loss, feed_dict={S.Z: sample})
+        # if m == 0: 
+        #     for t in range(len(G.theta_G)):
+        #         update.append(reward * delta[t])
+        # else:
+        #     for t in range(len(G.theta_G)):
+        #         update[t] += reward * delta[t]
+        reward_list.append(reward)
+        delta_list.append(delta)
+
+    sigma_R = np.std(reward_list)
+    #TODO: rank and make the selection
+    sort_ind = np.argsort(reward_list)
+    sort_ind = sort_ind[:top_num]
+    for m in range(len(sort_ind)):
+        ind = sort_ind[m]
         if m == 0: 
             for t in range(len(G.theta_G)):
-                update.append(reward * delta[t])
+                update.append(reward_list[ind] * delta_list[ind][t])
         else:
             for t in range(len(G.theta_G)):
-                update[t] += reward * delta[t]
+                update[t] += reward_list[ind] * delta_list[ind][t]
+
     for t in range(len(G.theta_G)):
-        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / search_num})
+        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / (top_num*sigma_R)})
     upd = 0
 
     G_loss_curr = sess.run(G_loss, feed_dict={G.Z: sample})
@@ -212,7 +234,7 @@ for it in range(1000000):
     if it % 10 == 0:
         print('Iter: {}'.format(it))
         for t in range(1):
-            print(update[0] * alpha / search_num)
+            print(update[0] * alpha / (top_num*sigma_R))
             print(sess.run(G.theta_G[0]))
         print('D loss: {:.4}'.format(D_loss_curr))
         print('G_loss: {:.4}'.format(G_loss_curr))

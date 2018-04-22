@@ -12,10 +12,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--dir', default="out_brs")
-parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--alpha', default=1.0)
-parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('_lambda', default=1000)
+parser.add_argument('--alpha', type=float, default=1.0)
+parser.add_argument('--l', type=float, default=1000)
 args = parser.parse_args()
 
 def xavier_init(size):
@@ -30,7 +28,7 @@ Z_dim = 100
 search_num = 64
 alpha = args.alpha
 v = 0.02
-_lambda = 1000
+_lambda = args.l
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = False
 D_lr = 1e-4
@@ -111,11 +109,11 @@ D_real, D_logit_real = discriminator(X)
 D_fake, D_logit_fake = discriminator(G_sample)
 
 D_loss = -tf.reduce_mean(tf.log(D_real) + tf.log(1. - D_fake))
-G_loss = tf.reduce_mean(tf.log(D_fake)) * _lambda
+G_loss = tf.reduce_mean(tf.log(D_fake)) * tf.constant(_lambda)
 
 S_fake, S_logit_fake = discriminator(S_sample)
 
-S_loss = tf.reduce_mean(tf.log(S_fake)) * _lambda
+S_loss = tf.reduce_mean(tf.log(S_fake)) * tf.constant(_lambda)
 # Alternative losses:
 # -------------------
 # D_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_real, labels=tf.ones_like(D_logit_real)))
@@ -164,7 +162,8 @@ if restore == True:
     sess.run(tf.assign(D_b1, weights['db1']))
     sess.run(tf.assign(D_b2, weights['db2']))
     
-sigma_r = 0
+out_file = open(out_dir+"/values.txt", "a+")
+
 for it in range(1000000):
     if it % save_step == 0:
         # import pdb; pdb.set_trace()
@@ -235,4 +234,9 @@ for it in range(1000000):
             print(sess.run(G.theta_G[0]))
         print('D loss: {:.4}'.format(D_loss_curr))
         print('G_loss: {:.4}'.format(G_loss_curr))
+        print('Sigma_R: {:.4}'.format(sigma_R))
+        out_file.write('Iter: {}'.format(it)+":\n"
+            + 'D loss: {:.4}'.format(D_loss_curr) + "\n"
+            + 'G_loss: {:.4}'.format(G_loss_curr) + "\n"
+            + 'Sigma_R: {:.4}'.format(sigma_R) + "\n")
         print()

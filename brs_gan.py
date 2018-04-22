@@ -12,6 +12,10 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--dir', default="out_brs")
+parser = argparse.ArgumentParser(description='Process some integers.')
+parser.add_argument('--alpha', default=1.0)
+parser = argparse.ArgumentParser(description='Process some integers.')
+parser.add_argument('_lambda', default=1000)
 args = parser.parse_args()
 
 def xavier_init(size):
@@ -24,8 +28,9 @@ save_step = 100
 data_dim = 784
 Z_dim = 100
 search_num = 64
-alpha = 1
+alpha = args.alpha
 v = 0.02
+_lambda = 1000
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = False
 D_lr = 1e-4
@@ -106,11 +111,11 @@ D_real, D_logit_real = discriminator(X)
 D_fake, D_logit_fake = discriminator(G_sample)
 
 D_loss = -tf.reduce_mean(tf.log(D_real) + tf.log(1. - D_fake))
-G_loss = tf.reduce_mean(tf.log(D_fake)) * 100
+G_loss = tf.reduce_mean(tf.log(D_fake)) * _lambda
 
 S_fake, S_logit_fake = discriminator(S_sample)
 
-S_loss = tf.reduce_mean(tf.log(S_fake)) * 100
+S_loss = tf.reduce_mean(tf.log(S_fake)) * _lambda
 # Alternative losses:
 # -------------------
 # D_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_real, labels=tf.ones_like(D_logit_real)))
@@ -159,7 +164,7 @@ if restore == True:
     sess.run(tf.assign(D_b1, weights['db1']))
     sess.run(tf.assign(D_b2, weights['db2']))
     
-
+sigma_r = 0
 for it in range(1000000):
     if it % save_step == 0:
         # import pdb; pdb.set_trace()
@@ -185,6 +190,9 @@ for it in range(1000000):
     sample = sample_Z(mb_size, Z_dim)
 
     update = []
+    reward_list = []
+    reward_list_2 = []
+    delta_list = []
     for m in range(search_num):
         delta = []
         for t in range(len(G.theta_G)):
@@ -193,10 +201,22 @@ for it in range(1000000):
         for t in range(len(G.theta_G)):
             sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})
         reward = sess.run(S_loss, feed_dict={S.Z: sample})
+        reward_list_2.append(reward)
         for t in range(len(G.theta_G)):
             sess.run(update_Sn[t], feed_dict={delta_ph[t]: delta[t]})
-        reward = reward - sess.run(S_loss, feed_dict={S.Z: sample})
-        if m == 0: 
+        tmp = sess.run(S_loss, feed_dict={S.Z: sample})
+        reward_list_2.append(tmp)
+        reward = reward - tmp
+
+        reward_list.append(reward)
+        delta_list.append(delta)
+
+    sigma_R = np.std(reward_list_2)
+    if sigma_R == 0:
+        sigma_R = 1.
+
+    for m in range(search_num):
+        if m == 0:
             for t in range(len(G.theta_G)):
                 update.append(reward * delta[t])
         else:
@@ -204,7 +224,6 @@ for it in range(1000000):
                 update[t] += reward * delta[t]
     for t in range(len(G.theta_G)):
         sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / search_num})
-    upd = 0
 
     G_loss_curr = sess.run(G_loss, feed_dict={G.Z: sample})
     _, D_loss_curr = sess.run([D_solver, D_loss], feed_dict={G.Z: sample, X: X_mb})

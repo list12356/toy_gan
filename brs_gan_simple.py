@@ -112,7 +112,7 @@ G_loss = tf.reduce_mean(tf.log(tf.clip_by_value(D_fake, 1e-16, 1.0)))
 
 S_fake, S_logit_fake = discriminator(S_sample)
 
-S_loss = tf.reduce_mean(tf.log(tf.clip_by_value(S_fake, 1e-16, 1.0))) 
+S_loss = tf.reduce_mean(tf.log(tf.clip_by_value(S_fake, 1e-16, 1.0)))
 # Alternative losses:
 # -------------------
 # D_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_real, labels=tf.ones_like(D_logit_real)))
@@ -166,6 +166,8 @@ if restore == True:
     
 out_file = open(out_dir+"/values.txt", "a+")
 
+sigma_R = 0
+
 for it in range(1000000):
     if it % save_step == 0:
         # import pdb; pdb.set_trace()
@@ -191,8 +193,9 @@ for it in range(1000000):
 
     update = []
     reward_list = []
+    reward_list_2 = []
     delta_list = []
-    for i in range(1000):
+    for i in range(1):
         for m in range(search_num):
             delta = []
             for t in range(len(G.theta_G)):
@@ -201,23 +204,21 @@ for it in range(1000000):
             for t in range(len(G.theta_G)):
                 sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})
             reward = sess.run(S_loss, feed_dict={S.Z: sample})
+            reward_list_2.append(reward)
             for t in range(len(G.theta_G)):
                 sess.run(update_Sn[t], feed_dict={delta_ph[t]: delta[t]})
-            reward = reward - sess.run(S_loss, feed_dict={S.Z: sample})
-            if m == 0: 
-                for t in range(len(G.theta_G)):
-                    update.append(reward * delta[t])
-            else:
-                for t in range(len(G.theta_G)):
-                    update[t] += reward * delta[t]
+            tmp = sess.run(S_loss, feed_dict={S.Z: sample})
+            reward_list_2.append(tmp)
+            reward = reward - tmp
             reward_list.append(reward)
             delta_list.append(delta)
 
-        sigma_R = np.std(reward_list)
+        sigma_R = np.std(reward_list_2)
         if sigma_R == 0:
-            sigma_R = 1
+            sigma_R = 1.
         for m in range(search_num):
-            reg = np.sum(reward_list[m])
+            reg = np.sum(reward_list_2)
+            reg = 1
             if m == 0: 
                 for t in range(len(G.theta_G)):
                     update.append(reward_list[m] / reg * delta_list[m][t])
@@ -252,4 +253,5 @@ for it in range(1000000):
         #     print(sess.run(G.theta_G[0]))
         print('D loss: {:.4}'.format(D_loss_curr))
         print('G_loss: {:.4}'.format(G_loss_curr))
+        print('Sigma_R: {:.4}'.format(sigma_R))
         print()

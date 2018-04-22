@@ -99,6 +99,7 @@ def plot(samples):
 G = Generator()
 G_sample = G.G_sample
 
+# served as a searcher
 S = Generator()
 S_sample = S.G_sample
 

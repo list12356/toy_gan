@@ -13,7 +13,9 @@ import argparse
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--dir', default="out_brs")
 parser.add_argument('--alpha', type=float, default=1.0)
-parser.add_argument('--l', type=float, default=1000.0)
+parser.add_argument('--l', type=float, default=1000)
+parser.add_argument('--sigma', type=int, default=0)
+parser.add_argument('--mode', default="smooth")
 args = parser.parse_args()
 
 def xavier_init(size):
@@ -29,6 +31,7 @@ search_num = 64
 alpha = args.alpha
 v = 0.02
 _lambda = args.l
+mode = args.mode
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = False
 D_lr = 1e-4
@@ -61,7 +64,18 @@ class Generator:
         G_h1 = tf.nn.relu(tf.matmul(self.Z, self.G_W1) + self.G_b1)
         G_log_prob = tf.matmul(G_h1, self.G_W2) + self.G_b2
         self.G_prob = tf.nn.sigmoid(G_log_prob)
-        self.G_sample = tf.to_int32(self.G_prob > 0.5)
+        if mode == "smooth":
+            self.G_sample = self.G_prob
+        elif mode == "binary":
+            self.G_sample = tf.to_int32(self.G_prob > tf.random_normal([1, data_dim]))
+        elif mode == "multilevel":
+            self.G_sample = tf.to_int32(self.G_prob > 1/ 10.0)
+            for i in range(2, 10):
+                self.G_sample = self.G_sample + tf.to_int32(self.G_prob > i/ 10.0)
+            self.G_sample = tf.to_float(self.G_sample) / tf.constant(10.0)
+        else:
+            print("Incompatiable mode!")
+            exit()
 
     def update(self):
         return
@@ -174,8 +188,21 @@ for it in range(1000000):
         fig = plot(samples)
         plt.savefig(out_dir + '/{}.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig)
-        X_mb, _ = mnist.train.next_batch(16)
-        X_mb = (X_mb > 0.5).astype(int)
+        if mode == "smooth":
+            X_mb, _ = mnist.train.next_batch(16)
+            # X_mb = (X_mb > 0.5).astype(int)
+        elif mode == "binary":
+            X_mb, _ = mnist.train.next_batch(16)
+            X_mb = (X_mb > 0.5).astype(int)
+        elif mode == "multilevel":
+            X_mb_s, _ = mnist.train.next_batch(16)
+            X_mb = np.zeros((16, 784))
+            for j in range(1, 10):
+                X_mb = X_mb + (X_mb_s > j / 10.0).astype(float)
+            X_mb = X_mb / 10.0
+        else:
+            print("Incompatiable mode!")
+            exit()
         fig2 = plot(X_mb)
         plt.savefig(out_dir + '/{}_real.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig2)
@@ -183,8 +210,23 @@ for it in range(1000000):
         i += 1
 
 
-    X_mb, _ = mnist.train.next_batch(mb_size)
-    X_mb = (X_mb > 0.5).astype(int)
+    if mode == "smooth":
+        X_mb, _ = mnist.train.next_batch(mb_size)
+        # X_mb = (X_mb > 0.5).astype(int)
+    elif mode == "binary":
+        X_mb, _ = mnist.train.next_batch(mb_size)
+        X_mb = (X_mb > 0.5).astype(int)
+    elif mode == "multilevel":
+        X_mb_s, _ = mnist.train.next_batch(mb_size)
+        X_mb = np.zeros((mb_size, 784))
+        for j in range(1, 10):
+            X_mb = X_mb + (X_mb_s > j / 10.0).astype(float)
+        X_mb = X_mb / 10.0
+    else:
+        print("Incompatiable mode!")
+        exit()
+    # X_mb, _ = mnist.train.next_batch(mb_size)
+    # X_mb = (X_mb > 0.5).astype(int)
 
     sample = sample_Z(mb_size, Z_dim)
 
@@ -210,7 +252,10 @@ for it in range(1000000):
         reward_list.append(reward)
         delta_list.append(delta)
 
-    sigma_R = np.std(reward_list_2)
+    if args.sigma == 1:
+        sigma_R = np.std(reward_list_2)
+    else:
+        sigma_R = 1
     if sigma_R == 0:
         sigma_R = 1.
 
@@ -222,7 +267,7 @@ for it in range(1000000):
             for t in range(len(G.theta_G)):
                 update[t] += reward_list[m] * delta_list[m][t]
     for t in range(len(G.theta_G)):
-        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / search_num})
+        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / (search_num * sigma_R)})
 
     G_loss_curr = sess.run(G_loss, feed_dict={G.Z: sample})
     _, D_loss_curr = sess.run([D_solver, D_loss], feed_dict={G.Z: sample, X: X_mb})

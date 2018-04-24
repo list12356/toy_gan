@@ -103,19 +103,19 @@ if not os.path.exists('out/'):
 i = 0
 
 for it in range(1000000):
-    if it % 100 == 0:
+    if it % 1000 == 0:
         samples = sess.run(G_sample, feed_dict={Z: sample_Z(16, Z_dim)})
-        gw1 = sess.run(G_W1)
-        gw2 = sess.run(G_W2)
-        gb1 = sess.run(G_b1)
-        gb2 = sess.run(G_b2)
-        dw1 = sess.run(D_W1)
-        dw2 = sess.run(D_W2)
-        db1 = sess.run(D_b1)
-        db2 = sess.run(D_b2)
-        np.savez('generator_' + str(it) + '.npz', 
-            gw1=gw1, gw2=gw2, gb1=gb1, gb2=gb2,
-            dw1=dw1, dw2=dw2, db1=db1, db2=db2)
+        # gw1 = sess.run(G_W1)
+        # gw2 = sess.run(G_W2)
+        # gb1 = sess.run(G_b1)
+        # gb2 = sess.run(G_b2)
+        # dw1 = sess.run(D_W1)
+        # dw2 = sess.run(D_W2)
+        # db1 = sess.run(D_b1)
+        # db2 = sess.run(D_b2)
+        # np.savez('generator_' + str(it) + '.npz', 
+        #     gw1=gw1, gw2=gw2, gb1=gb1, gb2=gb2,
+        #     dw1=dw1, dw2=dw2, db1=db1, db2=db2)
         fig = plot(samples)
         plt.savefig('out/{}.png'.format(str(i).zfill(3)), bbox_inches='tight')
         i += 1

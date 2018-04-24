@@ -63,7 +63,7 @@ class Generator:
         self.G_prob = tf.nn.sigmoid(G_log_prob)
         self.G_sample = tf.to_int32(self.G_prob > 1/ 10.0)
         for i in range(2, 10):
-            self.G_sample = self.G_sample + tf.to_int32(self.G_prob > 2/ 10.0)
+            self.G_sample = self.G_sample + tf.to_int32(self.G_prob > i/ 10.0)
         self.G_sample = tf.to_float(self.G_sample) / tf.constant(10.0)
 
     def update(self):

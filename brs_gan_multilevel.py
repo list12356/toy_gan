@@ -12,7 +12,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--dir', default="out_brs")
-parser.add_argument('--alpha', type=float, default=1.0)
+parser.add_argument('--alpha', type=float, default=0.1)
 parser.add_argument('--l', type=float, default=1000.0)
 args = parser.parse_args()
 
@@ -61,7 +61,10 @@ class Generator:
         G_h1 = tf.nn.relu(tf.matmul(self.Z, self.G_W1) + self.G_b1)
         G_log_prob = tf.matmul(G_h1, self.G_W2) + self.G_b2
         self.G_prob = tf.nn.sigmoid(G_log_prob)
-        self.G_sample = tf.to_int32(self.G_prob > 0.5)
+        self.G_sample = tf.to_int32(self.G_prob > 1/ 10.0)
+        for i in range(2, 10):
+            self.G_sample = self.G_sample + tf.to_int32(self.G_prob > 2/ 10.0)
+        self.G_sample = tf.to_float(self.G_sample) / tf.constant(10.0)
 
     def update(self):
         return
@@ -174,17 +177,22 @@ for it in range(1000000):
         fig = plot(samples)
         plt.savefig(out_dir + '/{}.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig)
-        X_mb, _ = mnist.train.next_batch(16)
-        X_mb = (X_mb > 0.5).astype(int)
+        X_mb_s, _ = mnist.train.next_batch(16)
+        X_mb = np.zeros((16, 784))
+        for j in range(1, 10):
+            X_mb = X_mb + (X_mb_s > j / 10.0).astype(float)
+        X_mb = X_mb / 10.0
         fig2 = plot(X_mb)
         plt.savefig(out_dir + '/{}_real.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig2)
         saver.save(sess, out_dir + '/{}_model.ckpt'.format(str(i).zfill(5)))
         i += 1
 
-
-    X_mb, _ = mnist.train.next_batch(mb_size)
-    X_mb = (X_mb > 0.5).astype(int)
+    X_mb_s, _ = mnist.train.next_batch(mb_size)
+    X_mb = np.zeros((mb_size, 784))
+    for j in range(1, 10):
+        X_mb = X_mb + (X_mb_s > j / 10.0).astype(float)
+    X_mb = X_mb / 10.0
 
     sample = sample_Z(mb_size, Z_dim)
 

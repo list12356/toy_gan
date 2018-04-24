@@ -67,7 +67,7 @@ class Generator:
         if mode == "smooth":
             self.G_sample = self.G_prob
         elif mode == "binary":
-            self.G_sample = tf.to_int32(self.G_prob > tf.random_normal([1, data_dim]))
+            self.G_sample = tf.to_int32(self.G_prob > 0.5)
         elif mode == "multilevel":
             self.G_sample = tf.to_int32(self.G_prob > 1/ 10.0)
             for i in range(2, 10):

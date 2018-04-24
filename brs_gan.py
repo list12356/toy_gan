@@ -255,7 +255,7 @@ for it in range(1000000):
     if args.sigma == 1:
         sigma_R = np.std(reward_list_2)
     else:
-        sigma_R = 1
+        sigma_R = 1.
     if sigma_R == 0:
         sigma_R = 1.
 

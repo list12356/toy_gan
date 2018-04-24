@@ -214,7 +214,7 @@ for it in range(1000000):
         tmp = sess.run(S_loss, feed_dict={S.Z: sample})
         reward_list_2.append(tmp)
         reward = reward - tmp
-
+        
         reward_list.append(reward)
         delta_list.append(delta)
 
@@ -225,10 +225,10 @@ for it in range(1000000):
     for m in range(search_num):
         if m == 0:
             for t in range(len(G.theta_G)):
-                update.append(reward * delta[t])
+                update.append(reward_list[m] * delta_list[m][t])
         else:
             for t in range(len(G.theta_G)):
-                update[t] += reward * delta[t]
+                update[t] += reward_list[m] * delta_list[m][t]
     for t in range(len(G.theta_G)):
         sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / search_num})
 

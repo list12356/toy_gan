@@ -12,7 +12,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--dir', default="out_brs_cgan")
-parser.add_argument('--alpha', type=float, default=10.0)
+parser.add_argument('--alpha', type=float, default=0.2)
 parser.add_argument('--l', type=float, default=1.)
 parser.add_argument('--sigma', type=int, default=1)
 parser.add_argument('--mode', default="binary")
@@ -223,15 +223,15 @@ for it in range(1000000):
         print("Incompatiable mode!")
         exit()
 
+    sample = sample_Z(mb_size, Z_dim)
     update = []
     reward_list = []
     reward_list_2 = []
     delta_list = []
     for m in range(search_num):
-        sample = sample_Z(mb_size, Z_dim)
         delta = []
         for t in range(len(G.theta_G)):
-            delta.append(np.random.normal(loc=0.0, scale=v,
+            delta.append(v * np.random.normal(loc=0.0, scale=1.,
                                         size=G.size[t]))
         for t in range(len(G.theta_G)):
             sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})
@@ -261,7 +261,7 @@ for it in range(1000000):
             for t in range(len(G.theta_G)):
                 update[t] += reward_list[m] * delta_list[m][t]
     for t in range(len(G.theta_G)):
-        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / (search_num * sigma_R)})
+        sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / (search_num * sigma_R * v)})
 
     G_loss_curr = sess.run(G_loss, feed_dict={G.Z: sample, C:C_mb})
     _, D_loss_curr = sess.run([D_solver, D_loss], feed_dict={G.Z: sample, X: X_mb, C: C_mb})

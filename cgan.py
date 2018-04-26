@@ -6,7 +6,7 @@ import matplotlib.gridspec as gridspec
 import os
 
 
-mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
+mnist = input_data.read_data_sets('../../MNIST_data', one_hot=True)
 mb_size = 64
 Z_dim = 100
 X_dim = mnist.train.images.shape[1]
@@ -92,7 +92,6 @@ D_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_lo
 D_loss = D_loss_real + D_loss_fake
 G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.ones_like(D_logit_fake)))
 
-
 D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
 G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=theta_G)
 
@@ -111,7 +110,7 @@ for it in range(1000000):
 
         Z_sample = sample_Z(n_sample, Z_dim)
         y_sample = np.zeros(shape=[n_sample, y_dim])
-        y_sample[:, 5] = 1
+        y_sample[:, 7] = 1
 
         samples = sess.run(G_sample, feed_dict={Z: Z_sample, y:y_sample})
 

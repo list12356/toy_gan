@@ -97,8 +97,8 @@ config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 
-if not os.path.exists('out/'):
-    os.makedirs('out/')
+if not os.path.exists('out_vanila/'):
+    os.makedirs('out_vanila/')
 
 i = 0
 
@@ -117,7 +117,7 @@ for it in range(1000000):
         #     gw1=gw1, gw2=gw2, gb1=gb1, gb2=gb2,
         #     dw1=dw1, dw2=dw2, db1=db1, db2=db2)
         fig = plot(samples)
-        plt.savefig('out/{}.png'.format(str(i).zfill(3)), bbox_inches='tight')
+        plt.savefig('out_vanila/{}.png'.format(str(i).zfill(3)), bbox_inches='tight')
         i += 1
         plt.close(fig)
 

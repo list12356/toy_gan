@@ -11,11 +11,11 @@ from scipy import stats
 import argparse
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--dir', default="out_brs")
+parser.add_argument('--dir', default="out_brs_pac")
 parser.add_argument('--alpha', type=float, default=0.2)
 parser.add_argument('--l', type=float, default=1.0)
 parser.add_argument('--sigma', type=int, default=0)
-parser.add_argument('--mode', default="smooth")
+parser.add_argument('--mode', default="binary")
 args = parser.parse_args()
 
 def xavier_init(size):
@@ -35,10 +35,11 @@ mode = args.mode
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = False
 D_lr = 1e-4
+pac_num =  5
 
-X = tf.placeholder(tf.float32, shape=[None, data_dim])
+X = tf.placeholder(tf.float32, shape=[None, data_dim * pac_num])
 
-D_W1 = tf.Variable(xavier_init([data_dim, 128]))
+D_W1 = tf.Variable(xavier_init([data_dim * pac_num, 128]))
 D_b1 = tf.Variable(tf.zeros(shape=[128]))
 
 D_W2 = tf.Variable(xavier_init([128, 1]))
@@ -54,28 +55,32 @@ class Generator:
         self.G_W2 = tf.Variable(xavier_init([128, data_dim]))
         self.G_b2 = tf.Variable(tf.zeros(shape=[data_dim]))
 
-        self.Z = tf.placeholder(tf.float32, shape=[None, Z_dim])
+        self.Z = []
+        for i in range(pac_num):
+            self.Z.append(tf.placeholder(tf.float32, shape=[None, Z_dim]))
 
         self.theta_G = [self.G_W1, self.G_W2, self.G_b1, self.G_b2]
         self.size = [[Z_dim, 128], [128,data_dim], [128], [data_dim]]
         self.build()
     
     def build(self):
-        G_h1 = tf.nn.relu(tf.matmul(self.Z, self.G_W1) + self.G_b1)
-        G_log_prob = tf.matmul(G_h1, self.G_W2) + self.G_b2
-        self.G_prob = tf.nn.sigmoid(G_log_prob)
-        if mode == "smooth":
-            self.G_sample = self.G_prob
-        elif mode == "binary":
-            self.G_sample = tf.to_int32(self.G_prob > 0.5)
-        elif mode == "multilevel":
-            self.G_sample = tf.to_int32(self.G_prob > 1/ 10.0)
-            for i in range(2, 10):
-                self.G_sample = self.G_sample + tf.to_int32(self.G_prob > i/ 10.0)
-            self.G_sample = tf.to_float(self.G_sample) / tf.constant(10.0)
-        else:
-            print("Incompatiable mode!")
-            exit()
+        self.G_sample = []
+        for i in range(pac_num):
+            G_h1 = tf.nn.relu(tf.matmul(self.Z[i], self.G_W1) + self.G_b1)
+            G_log_prob = tf.matmul(G_h1, self.G_W2) + self.G_b2
+            G_prob = tf.nn.sigmoid(G_log_prob)
+            if mode == "smooth":
+                self.G_sample.append(G_prob)
+            elif mode == "binary":
+                self.G_sample.append(tf.to_int32(G_prob > 0.5))
+            elif mode == "multilevel":
+                G_sample_tmp = tf.to_int32(G_prob > 1/ 10.0)
+                for i in range(2, 10):
+                    G_sample_tmp = G_sample_tmp + tf.to_int32(self.G_prob > i/ 10.0)
+                self.G_sample.append(tf.to_float(self.G_sample) / tf.constant(10.0))
+            else:
+                print("Incompatiable mode!")
+                exit()
 
     def update(self):
         return
@@ -112,20 +117,18 @@ def plot(samples):
 
 # G_sample = generator(Z)
 G = Generator()
-G_prob = G.G_prob
 G_sample = G.G_sample
 
 S = Generator()
-S_prob = S.G_prob
 S_sample = S.G_sample
 
 D_real, D_logit_real = discriminator(X)
-D_fake, D_logit_fake = discriminator(G_sample)
+D_fake, D_logit_fake = discriminator(tf.concat(G_sample, axis=1))
 
 D_loss = -tf.reduce_mean(tf.log(D_real) + tf.log(1. - D_fake))
 G_loss = tf.reduce_mean(tf.log(D_fake)) * tf.constant(_lambda)
 
-S_fake, S_logit_fake = discriminator(S_sample)
+S_fake, S_logit_fake = discriminator(tf.concat(S_sample, axis = 1))
 
 S_loss = tf.reduce_mean(tf.log(S_fake)) * tf.constant(_lambda)
 # Alternative losses:
@@ -158,7 +161,7 @@ for t in range(len(G.theta_G)):
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
-img_num = 0
+i = 0
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
@@ -181,12 +184,12 @@ out_file = open(out_dir+"/values.txt", "a+")
 for it in range(1000000):
     if it % save_step == 0:
         # import pdb; pdb.set_trace()
-        samples = sess.run(G_sample, feed_dict={G.Z: sample_Z(16, Z_dim)})
+        samples = sess.run(G_sample[0], feed_dict={G.Z[0]: sample_Z(16, Z_dim)})
         # plt.figure(it)
         # plt.plot(np.arange(data_dim), np.sum(samples, 0))
         # plt.show(block=False)
         fig = plot(samples)
-        plt.savefig(out_dir + '/{}.png'.format(str(img_num).zfill(5)), bbox_inches='tight')
+        plt.savefig(out_dir + '/{}.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig)
         if mode == "smooth":
             X_mb, _ = mnist.train.next_batch(16)
@@ -204,32 +207,38 @@ for it in range(1000000):
             print("Incompatiable mode!")
             exit()
         fig2 = plot(X_mb)
-        plt.savefig(out_dir + '/{}_real.png'.format(str(img_num).zfill(5)), bbox_inches='tight')
+        plt.savefig(out_dir + '/{}_real.png'.format(str(i).zfill(5)), bbox_inches='tight')
         plt.close(fig2)
-        saver.save(sess, out_dir + '/{}_model.ckpt'.format(str(img_num).zfill(5)))
-        img_num += 1
+        saver.save(sess, out_dir + '/{}_model.ckpt'.format(str(i).zfill(5)))
+        i += 1
 
+    X_mb = []
+    for p in range(pac_num):
+        if mode == "smooth":
+            X_t, _ = mnist.train.next_batch(mb_size)
+        elif mode == "binary":
+            X_t, _ = mnist.train.next_batch(mb_size)
+            X_t = (X_t > 0.5).astype(int)
+        elif mode == "multilevel":
+            X_mb_s, _ = mnist.train.next_batch(mb_size)
+            X_t = np.zeros((mb_size, 784))
+            for j in range(1, 10):
+                X_t = X_t + (X_mb_s > j / 10.0).astype(float)
+            X_t = X_t / 10.0
+        else:
+            print("Incompatiable mode!")
+            exit()
+        X_mb.append(X_t)
+    X_mb = np.concatenate(X_mb, axis=1)
 
-    if mode == "smooth":
-        X_mb, _ = mnist.train.next_batch(mb_size)
-        # X_mb = (X_mb > 0.5).astype(int)
-    elif mode == "binary":
-        X_mb, _ = mnist.train.next_batch(mb_size)
-        X_mb = (X_mb > 0.5).astype(int)
-    elif mode == "multilevel":
-        X_mb_s, _ = mnist.train.next_batch(mb_size)
-        X_mb = np.zeros((mb_size, 784))
-        for j in range(1, 10):
-            X_mb = X_mb + (X_mb_s > j / 10.0).astype(float)
-        X_mb = X_mb / 10.0
-    else:
-        print("Incompatiable mode!")
-        exit()
-    # X_mb, _ = mnist.train.next_batch(mb_size)
-    # X_mb = (X_mb > 0.5).astype(int)
-
-
-    sample = sample_Z(mb_size, Z_dim)
+    sample = []
+    for p in range(pac_num):
+        sample.append(sample_Z(mb_size, Z_dim))
+    feed_S = {}
+    feed_G = {}
+    for p in range(pac_num):
+        feed_S[S.Z[p]] = sample[p]
+        feed_G[G.Z[p]] = sample[p]
     update = []
     reward_list = []
     reward_list_2 = []
@@ -241,11 +250,11 @@ for it in range(1000000):
                                         size=G.size[t]))
         for t in range(len(G.theta_G)):
             sess.run(update_Sp[t], feed_dict={delta_ph[t]: delta[t]})
-        reward = sess.run(S_loss, feed_dict={S.Z: sample})
+        reward = sess.run(S_loss, feed_dict=feed_S)
         reward_list_2.append(reward)
         for t in range(len(G.theta_G)):
             sess.run(update_Sn[t], feed_dict={delta_ph[t]: delta[t]})
-        tmp = sess.run(S_loss, feed_dict={S.Z: sample})
+        tmp = sess.run(S_loss, feed_dict=feed_S)
         reward_list_2.append(tmp)
         reward = reward - tmp
 
@@ -269,8 +278,9 @@ for it in range(1000000):
     for t in range(len(G.theta_G)):
         sess.run(update_G[t], feed_dict={update_Gph[t]: update[t] * alpha / (search_num * sigma_R * v)})
 
-    G_loss_curr = sess.run(G_loss, feed_dict={G.Z: sample})
-    _, D_loss_curr = sess.run([D_solver, D_loss], feed_dict={G.Z: sample, X: X_mb})
+    G_loss_curr = sess.run(G_loss, feed_dict=feed_G)
+    feed_G[X] = X_mb
+    _, D_loss_curr = sess.run([D_solver, D_loss], feed_dict=feed_G)
 
     if it % 10 == 0:
         print('Iter: {}'.format(it))

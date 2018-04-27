@@ -11,7 +11,7 @@ from scipy import stats
 import argparse
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--dir', default="out_brs")
+parser.add_argument('--dir', default="out_brs_wgan")
 parser.add_argument('--alpha', type=float, default=0.2)
 parser.add_argument('--l', type=float, default=1.0)
 parser.add_argument('--sigma', type=int, default=0)
@@ -88,10 +88,9 @@ def sample_Z(m, n):
 
 def discriminator(x):
     D_h1 = tf.nn.relu(tf.matmul(tf.to_float(x), D_W1) + D_b1)
-    D_logit = tf.matmul(D_h1, D_W2) + D_b2
-    D_prob = tf.nn.sigmoid(D_logit)
+    out = tf.matmul(D_h1, D_W2) + D_b2
 
-    return D_prob, D_logit
+    return out
 
 
 def plot(samples):
@@ -119,15 +118,15 @@ S = Generator()
 S_prob = S.G_prob
 S_sample = S.G_sample
 
-D_real, D_logit_real = discriminator(X)
-D_fake, D_logit_fake = discriminator(G_sample)
+D_real = discriminator(X)
+D_fake = discriminator(G_sample)
 
-D_loss = -tf.reduce_mean(tf.log(D_real) + tf.log(1. - D_fake))
-G_loss = tf.reduce_mean(tf.log(D_fake)) * tf.constant(_lambda)
+D_loss = -tf.reduce_mean(D_real) + tf.reduce_mean(D_fake)
+G_loss = tf.reduce_mean(D_fake) * tf.constant(_lambda)
 
-S_fake, S_logit_fake = discriminator(S_sample)
+S_fake = discriminator(S_sample)
 
-S_loss = tf.reduce_mean(tf.log(S_fake)) * tf.constant(_lambda)
+S_loss = tf.reduce_mean(S_fake) * tf.constant(_lambda)
 # Alternative losses:
 # -------------------
 # D_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_real, labels=tf.ones_like(D_logit_real)))
@@ -136,7 +135,7 @@ S_loss = tf.reduce_mean(tf.log(S_fake)) * tf.constant(_lambda)
 # G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.ones_like(D_logit_fake)))
 
 # D_solver = tf.train.GradientDescentOptimizer(learning_rate=D_lr).minimize(D_loss, var_list=theta_D)
-D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)
+D_solver = tf.train.RMSPropOptimizer(learning_rate=1e-4).minimize(D_loss, var_list=theta_D)
 # G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=theta_G)
 
 mb_size = 128

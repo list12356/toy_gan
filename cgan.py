@@ -106,18 +106,22 @@ i = 0
 
 for it in range(1000000):
     if it % 1000 == 0:
-        n_sample = 16
+        for num in range(10):
 
-        Z_sample = sample_Z(n_sample, Z_dim)
-        y_sample = np.zeros(shape=[n_sample, y_dim])
-        y_sample[:, 7] = 1
+            if not os.path.exists('out/' + str(num)):
+                os.makedirs('out/' + str(num))
+            n_sample = 16
 
-        samples = sess.run(G_sample, feed_dict={Z: Z_sample, y:y_sample})
+            Z_sample = sample_Z(n_sample, Z_dim)
+            y_sample = np.zeros(shape=[n_sample, y_dim])
+            y_sample[:, num] = 1
 
-        fig = plot(samples)
-        plt.savefig('out/{}.png'.format(str(i).zfill(3)), bbox_inches='tight')
+            samples = sess.run(G_sample, feed_dict={Z: Z_sample, y:y_sample})
+
+            fig = plot(samples)
+            plt.savefig('out/' + str(num) + '/{}.png'.format(str(i).zfill(3)), bbox_inches='tight')
+            plt.close(fig)
         i += 1
-        plt.close(fig)
 
     X_mb, y_mb = mnist.train.next_batch(mb_size)
 

@@ -223,6 +223,7 @@ for it in range(1000000):
         print("Incompatiable mode!")
         exit()
 
+    import pdb; pdb.set_trace()
     sample = sample_Z(mb_size, Z_dim)
     update = []
     reward_list = []

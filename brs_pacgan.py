@@ -16,6 +16,7 @@ parser.add_argument('--alpha', type=float, default=0.2)
 parser.add_argument('--l', type=float, default=1.0)
 parser.add_argument('--sigma', type=int, default=0)
 parser.add_argument('--mode', default="binary")
+parser.add_argument('--pac_num', type=int, default=5)
 args = parser.parse_args()
 
 def xavier_init(size):
@@ -35,7 +36,7 @@ mode = args.mode
 mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 restore = False
 D_lr = 1e-4
-pac_num =  5
+pac_num =  args.pac_num
 
 X = tf.placeholder(tf.float32, shape=[None, data_dim * pac_num])
 
@@ -76,7 +77,7 @@ class Generator:
             elif mode == "multilevel":
                 G_sample_tmp = tf.to_int32(G_prob > 1/ 10.0)
                 for i in range(2, 10):
-                    G_sample_tmp = G_sample_tmp + tf.to_int32(self.G_prob > i/ 10.0)
+                    G_sample_tmp = G_sample_tmp + tf.to_int32(G_prob > i/ 10.0)
                 self.G_sample.append(tf.to_float(self.G_sample) / tf.constant(10.0))
             else:
                 print("Incompatiable mode!")

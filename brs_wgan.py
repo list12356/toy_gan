@@ -15,7 +15,7 @@ parser.add_argument('--dir', default="out_brs_wgan")
 parser.add_argument('--alpha', type=float, default=0.2)
 parser.add_argument('--l', type=float, default=1.0)
 parser.add_argument('--sigma', type=int, default=0)
-parser.add_argument('--mode', default="smooth")
+parser.add_argument('--mode', default="binary")
 args = parser.parse_args()
 
 def xavier_init(size):

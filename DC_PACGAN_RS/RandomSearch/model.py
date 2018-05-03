@@ -6,6 +6,9 @@ from glob import glob
 import tensorflow as tf
 import numpy as np
 from six.moves import xrange
+############UPDATESTART
+from tensorflow.examples.tutorials.mnist import input_data
+############UPDATEEND
 
 from ops import *
 from utils import *
@@ -88,9 +91,13 @@ class DCGAN(object):
         self.input_fname_pattern = input_fname_pattern
         self.checkpoint_dir = checkpoint_dir
 
+        ############UPDATESTART
         self.data_X = self.load_mnist()
-        self.c_dim = self.data_X[0].shape[-1]
+        # self.mnist = input_data.read_data_sets('./data/MNIST_data', one_hot=True)
 
+        self.c_dim = self.data_X[0].shape[-1]
+        # self.c_dim  = 1
+        ############UPDATEEND
         self.grayscale = (self.c_dim == 1)
 
         self.build_model()
@@ -126,7 +133,7 @@ class DCGAN(object):
         ############UPDATESTART
         self.S_sep = []
         for i in range(self.packing_num):
-            self.S_sep.append(self.generator(self.z[i], self.y))
+            self.S_sep.append(self.generatorDummy(self.z[i], self.y))
         self.S                  = tf.concat(self.S_sep, 3)
         ############UPDATEEND
 
@@ -183,9 +190,8 @@ class DCGAN(object):
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
         self.g_vars = [var for var in t_vars if 'g_' in var.name]
 
-
         ############UPDATESTART
-        self.s_vars = [var for var in t_vars if 'g_' in var.name]   #using g only in RHS as no s_
+        self.s_vars = [var for var in t_vars if 's_' in var.name]   #using g only in RHS as no s_
         ############UPDATEEND
 
         self.saver = tf.train.Saver()
@@ -228,10 +234,12 @@ class DCGAN(object):
         self.d_sum = merge_summary(
             [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
 
-        sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
-    
+        
+        ############UPDATESTART
+        # sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
         sample_inputs = self.data_X[0:self.sample_num]
-  
+        ############UPDATEEND
+
         counter = 1
         start_time = time.time()
         could_load, checkpoint_counter = self.load(self.checkpoint_dir)
@@ -255,11 +263,19 @@ class DCGAN(object):
 
 
         for epoch in xrange(config.epoch):
+            ############UPDATESTART
             batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
+            # batch_idxs = 1000
+            ############UPDATEEND
+
 
             for idx in xrange(0, batch_idxs):
+
+                ############UPDATESTART
                 batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
-            
+                # batch_images = self.mnist.train.next_batch(config.batch_size)
+                ############UPDATEEND
+                
                 feed_dict_z = {}
                 for i in range(self.packing_num):
                     feed_dict_z[self.z[i]] = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]).astype(np.float32)
@@ -353,7 +369,10 @@ class DCGAN(object):
                             [self.sampler, self.d_loss, self.g_loss],
                             feed_dict=dict({
                                 #self.z: sample_z,
-                                self.inputs: sample_inputs,
+                                ############UPDATESTART
+                                # self.inputs: sample_inputs,
+                                self.inputs: batch_images,
+                                ############UPDATEEND
                             }, **feed_dict_z))
                         save_images(samples, image_manifold_size(samples.shape[0]),
                             '{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
@@ -454,6 +473,44 @@ class DCGAN(object):
 
             return tf.nn.tanh(h4)
 
+    ############UPDATESTART
+    def generatorDummy(self, z, y=None):
+        with tf.variable_scope("generator_s", reuse=tf.AUTO_REUSE) as scope:
+            s_h, s_w = self.output_height, self.output_width
+            s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+            s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+            s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+            s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+
+            
+
+            # project `z` and reshape
+            self.z_, self.h0_w, self.h0_b = linear(
+                z, self.sf_dim*8*s_h16*s_w16, 's_h0_lin', with_w=True)
+
+            self.h0 = tf.reshape(
+                self.z_, [-1, s_h16, s_w16, self.gf_dim * 8])
+            h0 = tf.nn.relu(self.s_bn0(self.h0))
+
+            self.h1, self.h1_w, self.h1_b = deconv2d(
+            h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='s_h1', with_w=True)
+            h1 = tf.nn.relu(self.s_bn1(self.h1))
+
+            h2, self.h2_w, self.h2_b = deconv2d(
+                h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='s_h2', with_w=True)
+            h2 = tf.nn.relu(self.s_bn2(h2))
+
+            h3, self.h3_w, self.h3_b = deconv2d(
+                h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='s_h3', with_w=True)
+            h3 = tf.nn.relu(self.s_bn3(h3))
+
+            h4, self.h4_w, self.h4_b = deconv2d(
+                h3, [self.batch_size, s_h, s_w, int(self.c_dim / self.packing_num)], name='s_h4', with_w=True)
+
+            return tf.nn.tanh(h4)
+    ############UPDATEEND
+
+
     def sampler(self, z, y=None):
         with tf.variable_scope("generator") as scope:
             scope.reuse_variables()
@@ -496,18 +553,18 @@ class DCGAN(object):
         teX = loaded[16:].reshape((10000, 28, 28, 1)).astype(np.float)
     
         X = np.concatenate((trX, teX), axis=0)
-        ids = np.random.randint(0, X.shape[0], size=(self.num_training_sample, 3))
+        ids = np.random.randint(0, X.shape[0], size=(self.num_training_sample, 1))      # what does 3 corresponds to here ???
         X_training = np.zeros(shape=(ids.shape[0], 28, 28, ids.shape[1]))
         for i in range(ids.shape[0]):
             for j in range(ids.shape[1]):
                 X_training[i, :, :, j] = X[ids[i, j], :, :, 0]
                 
         ids = np.random.randint(0, X_training.shape[0], size=(self.num_training_sample, self.packing_num))
-        X_stacked = np.zeros(shape=(ids.shape[0], 28, 28, 3 * self.packing_num))
+        X_stacked = np.zeros(shape=(ids.shape[0], 28, 28,  self.packing_num))
         for i in range(ids.shape[0]):
             for j in range(self.packing_num):
-                for k in range(3):
-                    X_stacked[i, :, :, j * 3 + k] = X_training[ids[i, j], :, :, k]
+                for k in range(1):
+                    X_stacked[i, :, :, j] = X_training[ids[i, j], :, :, k]
 
         return X_stacked/255.
 
